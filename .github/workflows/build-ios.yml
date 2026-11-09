@@ -1,0 +1,116 @@
+name: build-ios
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 90
+    env:
+      SD_COMMIT: fc350be2ceeeb859bcc201ac435591ed7d46821d
+    steps:
+      - name: Check out this repository
+        uses: actions/checkout@v4
+
+      - name: Clone stable-diffusion.cpp at the pinned commit
+        shell: bash
+        run: |
+          git clone --recursive https://github.com/leejet/stable-diffusion.cpp sd
+          cd sd
+          git checkout "$SD_COMMIT"
+          git submodule update --init --recursive
+          git log -1 --format='commit %H%ndate %cd'
+
+      - name: Find the Turbo sigma preset in the engine sources
+        shell: bash
+        run: |
+          cd sd
+          grep -rn -i -B3 -A16 "qwen-image-2.1-turbo" examples src include docs 2>/dev/null | head -160 > ../sigmas.txt || true
+          wc -l ../sigmas.txt
+
+      - name: Build stable-diffusion.cpp for iOS with Metal
+        shell: bash
+        run: |
+          cmake -S sd -B build-ios -G Xcode \
+            -DCMAKE_SYSTEM_NAME=iOS \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=16.4 \
+            -DSD_METAL=ON \
+            -DGGML_METAL=ON \
+            -DGGML_METAL_EMBED_LIBRARY=ON \
+            -DGGML_METAL_USE_BF16=ON \
+            -DGGML_OPENMP=OFF \
+            -DGGML_NATIVE=OFF \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DSD_BUILD_EXAMPLES=OFF \
+            -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED=NO 2>&1 | tee sd-build.log
+          cmake --build build-ios --config Release --target stable-diffusion -j 4 \
+            -- CODE_SIGNING_ALLOWED=NO 2>&1 | tee -a sd-build.log | tail -n 5
+
+      - name: Collect the static libraries
+        shell: bash
+        run: |
+          mkdir -p app/libs
+          find build-ios \( -name 'libstable-diffusion.a' -o -name 'libggml*.a' \) -path '*Release-iphoneos*' -exec cp {} app/libs/ \;
+          ls -la app/libs
+          for lib in libstable-diffusion.a libggml.a libggml-base.a libggml-cpu.a libggml-metal.a libggml-blas.a; do
+            test -f "app/libs/$lib" || { echo "missing $lib"; exit 1; }
+          done
+
+      - name: Generate the Xcode project
+        shell: bash
+        run: |
+          brew install xcodegen
+          cd app
+          xcodegen generate
+
+      - name: Build the app
+        shell: bash
+        run: |
+          cd app
+          xcodebuild -project SDMetal.xcodeproj -scheme SDMetal \
+            -configuration Release -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath ../dd \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee ../app-build.log | tail -n 30
+
+      - name: Package the unsigned ipa
+        shell: bash
+        run: |
+          APP=$(find dd/Build/Products -maxdepth 3 -name 'SDMetal.app' | head -1)
+          echo "App bundle: $APP"
+          test -n "$APP"
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+          zip -qr SDMetal.ipa Payload
+          ls -la SDMetal.ipa
+
+      - name: Upload the ipa
+        uses: actions/upload-artifact@v4
+        with:
+          name: SDMetal-ipa
+          path: SDMetal.ipa
+
+      - name: Write the summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '## Turbo sigma preset search'
+            echo '```'
+            cat sigmas.txt 2>/dev/null || echo 'not found'
+            echo '```'
+            echo '## Libraries'
+            echo '```'
+            ls -la app/libs 2>/dev/null || echo 'none'
+            echo '```'
+            echo '## Engine build, errors only'
+            echo '```'
+            grep -E "error:|CMake Error|Unknown CMake|BUILD (SUCCEEDED|FAILED)" -A2 sd-build.log 2>/dev/null | head -60 || true
+            echo '```'
+            echo '## App build, errors only'
+            echo '```'
+            grep -E "error:|Undefined symbols|ld: |BUILD (SUCCEEDED|FAILED)" -A3 app-build.log 2>/dev/null | head -100 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
