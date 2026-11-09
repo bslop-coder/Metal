@@ -1,0 +1,51 @@
+name: SDMetal
+
+options:
+  deploymentTarget:
+    iOS: "16.4"
+  createIntermediateGroups: true
+
+targets:
+  SDMetal:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+    info:
+      path: Info.plist
+      properties:
+        CFBundleDisplayName: SD Metal
+        UILaunchScreen: {}
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: local.sdmetal.app
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_OBJC_BRIDGING_HEADER: Sources/Bridge/SDMetal-Bridging-Header.h
+        HEADER_SEARCH_PATHS:
+          - $(SRCROOT)/../sd/include
+          - $(SRCROOT)/Sources/Bridge
+        LIBRARY_SEARCH_PATHS:
+          - $(SRCROOT)/libs
+        OTHER_LDFLAGS:
+          - -lstable-diffusion
+          - -lggml
+          - -lggml-base
+          - -lggml-cpu
+          - -lggml-metal
+          - -lggml-blas
+          - -lc++
+        CODE_SIGNING_ALLOWED: "NO"
+        CODE_SIGNING_REQUIRED: "NO"
+        CODE_SIGN_IDENTITY: ""
+    dependencies:
+      - sdk: Accelerate.framework
+      - sdk: Metal.framework
+      - sdk: MetalKit.framework
+      - sdk: Foundation.framework
