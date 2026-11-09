@@ -1,0 +1,91 @@
+name: stage0-discovery
+on:
+  workflow_dispatch:
+jobs:
+  discover:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - name: Tool versions
+        shell: bash
+        run: |
+          {
+            echo "## Tools"
+            sw_vers
+            xcodebuild -version
+            xcodebuild -showsdks | grep -i ios
+            cmake --version | head -1
+          } 2>&1 | tee -a report.txt
+
+      - name: Clone stable-diffusion.cpp
+        shell: bash
+        run: |
+          git clone --recursive https://github.com/leejet/stable-diffusion.cpp sd
+          cd sd
+          {
+            echo "## Commit"
+            git log -1 --format='commit %H%ndate %cd%nsubject %s'
+            echo "## Submodules"
+            git submodule status
+          } 2>&1 | tee -a ../report.txt
+
+      - name: Build options
+        shell: bash
+        run: |
+          cd sd
+          {
+            echo "## CMake options in CMakeLists.txt"
+            grep -n -i -E 'option\(|GGML_METAL|SD_METAL' CMakeLists.txt
+            echo "## Files in docs"
+            ls docs
+          } 2>&1 | tee -a ../report.txt
+
+      - name: Public header
+        shell: bash
+        run: |
+          cd sd/include
+          {
+            echo "## Exported functions"
+            grep -n 'SD_API' stable-diffusion.h
+            echo "## sd_ctx_params_t"
+            grep -n -B70 '} sd_ctx_params_t;' stable-diffusion.h
+            echo "## sd_img_gen_params_t"
+            grep -n -B50 '} sd_img_gen_params_t;' stable-diffusion.h
+            echo "## sd_image_t"
+            grep -n -B8 '} sd_image_t;' stable-diffusion.h
+          } 2>&1 | tee -a ../../report.txt
+
+      - name: Try iOS Metal configure and build
+        continue-on-error: true
+        shell: bash
+        run: |
+          {
+            echo "## iOS configure"
+            cmake -S sd -B build-ios -G Xcode \
+              -DCMAKE_SYSTEM_NAME=iOS \
+              -DCMAKE_OSX_ARCHITECTURES=arm64 \
+              -DCMAKE_OSX_DEPLOYMENT_TARGET=16.4 \
+              -DSD_METAL=ON \
+              -DGGML_METAL=ON \
+              -DGGML_METAL_EMBED_LIBRARY=ON \
+              -DGGML_OPENMP=OFF \
+              -DGGML_NATIVE=OFF \
+              -DBUILD_SHARED_LIBS=OFF \
+              -DSD_BUILD_EXAMPLES=OFF \
+              -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED=NO
+            echo "## iOS build"
+            cmake --build build-ios --config Release --target stable-diffusion -j 4 \
+              -- CODE_SIGNING_ALLOWED=NO
+            echo "## Built libraries"
+            find build-ios -name '*.a' -exec ls -la {} \;
+          } 2>&1 | tail -n 150 | tee -a report.txt
+
+      - name: Publish report
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '```'
+            cat report.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
