@@ -28,6 +28,17 @@ jobs:
           grep -rn -i -B3 -A16 "qwen-image-2.1-turbo" examples src include docs 2>/dev/null | head -160 > ../sigmas.txt || true
           wc -l ../sigmas.txt
 
+      - name: Print the engine's model file loading source
+        shell: bash
+        run: |
+          cd sd
+          F=$(grep -rl "failed to memory-map" src 2>/dev/null | head -1 || true)
+          echo "file: $F" > ../loader.txt
+          if [ -n "$F" ]; then
+            grep -n -B35 -A25 "failed to memory-map" "$F" >> ../loader.txt || true
+          fi
+          wc -l ../loader.txt
+
       - name: Build stable-diffusion.cpp for iOS with Metal
         shell: bash
         run: |
@@ -100,6 +111,10 @@ jobs:
             echo '## Turbo sigma preset search'
             echo '```'
             cat sigmas.txt 2>/dev/null || echo 'not found'
+            echo '```'
+            echo '## Engine file loading source'
+            echo '```'
+            sed -n 1,150p loader.txt 2>/dev/null || echo 'not found'
             echo '```'
             echo '## Libraries'
             echo '```'
