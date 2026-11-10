@@ -14,14 +14,14 @@ struct ModelPaths {
 struct LoadConfig {
     var backend = ""
     var paramsBackend = ""
-    var maxVram = ""
+    var maxVram = "3"
     var modelArgs = ""
     var flashAttn = "auto"
     var convDirect = ""
     var threads = 0
     var linearScale = 0.0
     var attnScale = 0.0
-    var mmap = true
+    var mmap = false
     var autoFit = true
     var noSegment = false
     var noPrefetch = false
@@ -76,6 +76,7 @@ final class SDEngine: ObservableObject {
     private var logHandle: FileHandle?
     private let fileQueue = DispatchQueue(label: "sdmetal.log")
     private var timer: Timer?
+    private let startTime = Date()
 
     init() {
         rotateLogs()
@@ -111,7 +112,8 @@ final class SDEngine: ObservableObject {
         let freeMB = Double(os_proc_available_memory()) / 1_048_576.0
         let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty { return }
-        let line = String(format: "[%.0f MB free] ", freeMB) + trimmed
+        let elapsed = Date().timeIntervalSince(startTime)
+        let line = String(format: "[+%.1fs %.0f MB free] ", elapsed, freeMB) + trimmed
         fileQueue.sync {
             if let data = (line + "\n").data(using: .utf8) {
                 try? self.logHandle?.write(contentsOf: data)
