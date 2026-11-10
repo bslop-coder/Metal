@@ -72,6 +72,12 @@ struct ContentView: View {
                         }
                     }
                     Spacer()
+                    if models.urls[slot.id] != nil {
+                        Button("Clear") {
+                            models.clear(slot.id)
+                        }
+                        .buttonStyle(.borderless)
+                    }
                     Button("Choose") {
                         pickingKey = slot.id
                         showPicker = true
