@@ -39,6 +39,31 @@ jobs:
           fi
           wc -l ../loader.txt
 
+      - name: Inspect the engine's own command line program
+        shell: bash
+        run: |
+          cd sd
+          {
+            echo "## examples layout"
+            ls examples examples/cli examples/common examples/server 2>&1 | head -60
+            echo
+            echo "## line counts"
+            wc -l examples/cli/* examples/common/* 2>&1 | tail -25
+            echo
+            echo "## calls to exit( in the command line code (these would end the whole app)"
+            grep -rn "exit(" examples/cli examples/common 2>/dev/null | head -40 || true
+            echo
+            echo "## main() of the command line program"
+            grep -n "int main" -A60 examples/cli/main.cpp 2>/dev/null | head -110 || true
+            echo
+            echo "## where the flags become engine parameters"
+            grep -rn "to_sd_ctx_params\|to_sd_img_gen_params\|parse_args\|get_options" examples 2>/dev/null | head -30 || true
+            echo
+            echo "## CMake files for the examples"
+            cat examples/CMakeLists.txt examples/cli/CMakeLists.txt examples/common/CMakeLists.txt 2>/dev/null | head -80 || true
+          } > ../cli-inspect.txt 2>&1
+          wc -l ../cli-inspect.txt
+
       - name: Build stable-diffusion.cpp for iOS with Metal
         shell: bash
         run: |
@@ -115,6 +140,10 @@ jobs:
             echo '## Engine file loading source'
             echo '```'
             sed -n 1,150p loader.txt 2>/dev/null || echo 'not found'
+            echo '```'
+            echo '## Engine command line program'
+            echo '```'
+            sed -n 1,230p cli-inspect.txt 2>/dev/null || echo 'not found'
             echo '```'
             echo '## Libraries'
             echo '```'
