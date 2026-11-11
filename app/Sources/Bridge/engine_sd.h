@@ -75,6 +75,12 @@ bool eng_sd_generate(const eng_sd_gen_params* params,
 void eng_sd_cancel(void);
 void eng_free(void* ptr);
 
+/* Per-operation profiler. While it is on, the engine evaluates every graph node on its own and
+ * waits for it, so absolute times are inflated; the shares and the achieved GFLOPS per
+ * operation type and shape are what matters. Start it before a generation, read the report after. */
+void eng_sd_profile_start(void);
+size_t eng_sd_profile_report(char* buffer, size_t buffer_size);
+
 #ifdef __cplusplus
 }
 #endif
