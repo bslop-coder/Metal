@@ -205,6 +205,12 @@ struct ContentView: View {
                 .buttonStyle(.borderless)
                 .disabled(engine.busy || !engine.loaded)
                 Spacer()
+                Button("Profile") {
+                    engine.generate(config: genConfig, profile: true)
+                }
+                .buttonStyle(.borderless)
+                .disabled(engine.busy || !engine.loaded)
+                Spacer()
                 Button("Cancel") {
                     engine.cancel()
                 }
