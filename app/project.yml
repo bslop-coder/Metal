@@ -30,6 +30,7 @@ targets:
         SWIFT_OBJC_BRIDGING_HEADER: Sources/Bridge/SDMetal-Bridging-Header.h
         HEADER_SEARCH_PATHS:
           - $(SRCROOT)/../sd/include
+          - $(SRCROOT)/../sd/ggml/include
           - $(SRCROOT)/Sources/Bridge
         LIBRARY_SEARCH_PATHS:
           - $(SRCROOT)/libs
