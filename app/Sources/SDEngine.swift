@@ -222,12 +222,21 @@ final class SDEngine: ObservableObject {
         log("unloaded")
     }
 
-    func generate(config: GenConfig) {
+    func generate(config requested: GenConfig, profile: Bool = false) {
         if busy || !loaded { return }
+        var config = requested
+        if profile {
+            config.width = 512
+            config.height = 512
+            config.steps = 2
+        }
         busy = true
-        status = "Generating"
+        status = profile ? "Profiling (512x512, 2 steps)" : "Generating"
         progressText = ""
+        UIApplication.shared.isIdleTimerDisabled = true
+        let finalConfig = config
         DispatchQueue.global(qos: .userInitiated).async {
+            let config = finalConfig
             var allocated: [UnsafeMutablePointer<CChar>] = []
             func cstr(_ text: String) -> UnsafePointer<CChar>? {
                 if text.isEmpty { return nil }
@@ -257,9 +266,18 @@ final class SDEngine: ObservableObject {
             var errorBuffer = [CChar](repeating: 0, count: 2048)
             let errorCapacity = errorBuffer.count
 
+            if profile { eng_sd_profile_start() }
             let started = Date()
             let ok = eng_sd_generate(&params, &pixels, &width, &height, &channels, &info, &errorBuffer, errorCapacity)
             let elapsed = Date().timeIntervalSince(started)
+            if profile {
+                var report = [CChar](repeating: 0, count: 16384)
+                let reportCapacity = report.count
+                _ = eng_sd_profile_report(&report, reportCapacity)
+                for line in String(cString: report).split(separator: "\n") {
+                    self.log("PROFILE " + String(line))
+                }
+            }
             let message = String(cString: errorBuffer)
             for pointer in allocated { free(pointer) }
 
@@ -291,6 +309,7 @@ final class SDEngine: ObservableObject {
             let finalSummary = summary
             let finalImage = result
             DispatchQueue.main.async {
+                UIApplication.shared.isIdleTimerDisabled = false
                 self.busy = false
                 self.status = finalSummary
                 if let finalImage = finalImage { self.image = finalImage }
